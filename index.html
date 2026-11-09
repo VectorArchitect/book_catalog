@@ -92,6 +92,7 @@
 </library>
 </script>
 
+<script src="./catalog-utils.js"></script>
 <script>
   // script.js (simple and commented for you to explain)
   const xmlText = document.getElementById('booksData').textContent.trim();
@@ -121,8 +122,21 @@
 
   // favorites stored in localStorage
   const FAVORITES_KEY = 'my_book_favs';
-  function loadFavs(){ return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'); }
-  function saveFavs(arr){ localStorage.setItem(FAVORITES_KEY, JSON.stringify(arr)); }
+  function loadFavs(){
+    try {
+      const stored = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+      return Array.isArray(stored) ? stored.filter(id => typeof id === 'string') : [];
+    } catch (error) {
+      return [];
+    }
+  }
+  function saveFavs(arr){
+    try {
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(arr));
+    } catch (error) {
+      // The catalog remains usable when browser storage is unavailable.
+    }
+  }
 
   // populate genre filter options
   const genres = [...new Set(books.map(b => b.genre).filter(Boolean))];
@@ -145,7 +159,7 @@
         <div class="meta">${escapeHtml(b.author)} • ${escapeHtml(b.year)}</div>
         <div class="tags"><span class="tag">${escapeHtml(b.genre)}</span></div>
         <div class="footer">
-          <small>${b.summary.slice(0,70)}${b.summary.length>70?'...':''}</small>
+          <small>${escapeHtml(b.summary.slice(0,70))}${b.summary.length>70?'...':''}</small>
           <div>
             <button class="icon" title="View details" data-id="${b.id}">🔍</button>
             <button class="icon" title="Toggle favorite" data-fav="${b.id}">${favs.includes(b.id)?'★':'☆'}</button>
@@ -164,12 +178,11 @@
 
   // search + filter logic
   function filterBooks(){
-    const q = search.value.trim().toLowerCase();
-    const genre = genreFilter.value;
-    let list = books.filter(b=>{
-      const matchQ = !q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q);
-      const matchGenre = !genre || b.genre === genre;
-      return matchQ && matchGenre;
+    const list = filterCatalogBooks(books, {
+      query: search.value,
+      genre: genreFilter.value,
+      favoritesOnly: favMode,
+      favoriteIds: loadFavs()
     });
     render(list);
   }
@@ -221,15 +234,8 @@
   let favMode = false;
   showFav.addEventListener('click', ()=>{
     favMode = !favMode;
-    if(favMode){
-      showFav.textContent = 'Show All';
-      const favs = loadFavs();
-      const list = books.filter(b => favs.includes(b.id));
-      render(list);
-    } else {
-      showFav.textContent = 'Show Favorites';
-      render(books);
-    }
+    showFav.textContent = favMode ? 'Show All' : 'Show Favorites';
+    filterBooks();
   });
 
   // close modal on outside click
